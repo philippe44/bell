@@ -23,8 +23,15 @@ int WrappedSemaphore::twait(long milliseconds) {
 
   gettimeofday(&tv, 0);
 
-  ts.tv_sec = tv.tv_sec + milliseconds / 1000;
-  ts.tv_nsec = tv.tv_usec * 1000 + (milliseconds % 1000) * 1000000;
+  // both terms can approach one second, so the sum has to be split rather than
+  // stored straight into tv_nsec: sem_timedwait() fails with EINVAL unless
+  // tv_nsec is below one second, and failing turns a polling caller into a
+  // busy loop
+  long nsec = tv.tv_usec * 1000 + (milliseconds % 1000) * 1000000;
+
+  ts.tv_sec = tv.tv_sec + milliseconds / 1000 + nsec / 1000000000;
+  ts.tv_nsec = nsec % 1000000000;
+
   return sem_timedwait(&this->semaphoreHandle, &ts);
 }
 
